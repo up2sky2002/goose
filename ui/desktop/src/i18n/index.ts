@@ -3,22 +3,56 @@
  *
  * Locale resolution order:
  *   1. GOOSE_LOCALE config value (set via environment variable, passed through appConfig)
- *   2. navigator.language (browser/OS locale)
- *   3. "en" (fallback)
+ *   2. navigator.languages (full accept-language list from OS/browser)
+ *   3. navigator.language (primary locale)
+ *   4. "en" (fallback)
+ *
+ * For Chinese: any Simplified Chinese tag (zh, zh-CN, zh-Hans, zh-Hans-CN, zh-SG, zh-MY)
+ * maps to the "zh-CN" catalog. Traditional variants (zh-TW, zh-HK, zh-Hant) are not yet
+ * translated and fall through to English.
  */
 
 // Re-export react-intl utilities that components use directly
 export { defineMessages, useIntl } from 'react-intl';
 
 /** The set of locales that have translation catalogs. */
-const SUPPORTED_LOCALES = new Set(['en']);
+const SUPPORTED_LOCALES = new Set(['en', 'zh-CN']);
+
+/**
+ * Normalize a BCP 47 tag to one of the SUPPORTED_LOCALES, or null if no match.
+ *
+ * Handles Simplified Chinese aliases: "zh", "zh-Hans", "zh-Hans-CN", "zh-SG", "zh-MY"
+ * all map to "zh-CN". "zh-TW" / "zh-HK" / "zh-Hant*" are intentionally NOT matched —
+ * they are Traditional Chinese and distinct from Simplified.
+ */
+function matchSupported(tag: string): string | null {
+  if (!tag) return null;
+  // Exact match first
+  if (SUPPORTED_LOCALES.has(tag)) return tag;
+
+  const lower = tag.toLowerCase();
+
+  // Simplified Chinese variants
+  const isTraditional = /^zh-(hant|tw|hk|mo)\b/.test(lower);
+  if (!isTraditional && (lower === 'zh' || lower.startsWith('zh-'))) {
+    // Any zh-* that is NOT Traditional counts as Simplified.
+    // Covers zh, zh-CN, zh-Hans, zh-Hans-CN, zh-SG, zh-MY.
+    if (SUPPORTED_LOCALES.has('zh-CN')) return 'zh-CN';
+  }
+
+  // Base language fallback (e.g. "pt-BR" → "pt")
+  const base = tag.split('-')[0];
+  if (SUPPORTED_LOCALES.has(base)) return base;
+
+  return null;
+}
 
 /**
  * Detect the user's preferred locale.
  *
  * Returns two values:
  * - `locale`: the full BCP 47 tag (e.g. "en-GB") for formatting (dates, numbers).
- * - `messageLocale`: the base language that has a translation catalog (e.g. "en").
+ * - `messageLocale`: the locale key that has a translation catalog (e.g. "en", "zh-CN").
  */
 export function getLocale(): { locale: string; messageLocale: string } {
   const explicit =
@@ -32,28 +66,31 @@ export function getLocale(): { locale: string; messageLocale: string } {
     candidates.push(explicit);
   }
 
-  if (typeof navigator !== 'undefined' && navigator.language) {
-    candidates.push(navigator.language);
+  if (typeof navigator !== 'undefined') {
+    // Check navigator.languages (full preference list) first, then primary language.
+    // This lets a Chinese user on an en-US Windows UI still get Chinese if zh is in their list.
+    if (Array.isArray(navigator.languages)) {
+      for (const tag of navigator.languages) {
+        if (tag) candidates.push(tag);
+      }
+    }
+    if (navigator.language) candidates.push(navigator.language);
   }
 
   for (const tag of candidates) {
-    // Exact match first
-    if (SUPPORTED_LOCALES.has(tag)) return { locale: tag, messageLocale: tag };
-    // Try base language (e.g. "pt-BR" → "pt") for the catalog, but keep the
-    // full regional tag for formatting so date/number output respects the region.
-    const base = tag.split('-')[0];
-    if (SUPPORTED_LOCALES.has(base)) {
-      // Validate the full tag is a well-formed BCP 47 locale before using it
-      // for formatting. Invalid tags (e.g. "en-") would cause RangeError in
-      // Intl APIs, so fall back to the base language in that case.
-      let locale = base;
-      try {
-        [locale] = Intl.getCanonicalLocales(tag);
-      } catch {
-        // tag is not valid BCP 47 — use the base language instead
-      }
-      return { locale, messageLocale: base };
+    const matched = matchSupported(tag);
+    if (!matched) continue;
+
+    // Validate the full tag is a well-formed BCP 47 locale before using it
+    // for formatting. Invalid tags (e.g. "en-") would cause RangeError in
+    // Intl APIs, so fall back to the matched key in that case.
+    let locale = matched;
+    try {
+      [locale] = Intl.getCanonicalLocales(tag);
+    } catch {
+      // tag is not valid BCP 47 — use the matched key instead
     }
+    return { locale, messageLocale: matched };
   }
 
   return { locale: 'en', messageLocale: 'en' };
