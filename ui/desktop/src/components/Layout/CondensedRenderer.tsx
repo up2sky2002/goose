@@ -6,6 +6,7 @@ import { cn } from '../../utils';
 import { DropdownMenu, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { ChatSessionsDropdown, SessionsList } from './navigation';
 import type { NavigationRendererProps } from './navigation/types';
+import { getNavItemLabel } from '../../hooks/useNavigationItems';
 
 const i18n = defineMessages({
   newChat: {
@@ -161,7 +162,7 @@ export const CondensedRenderer: React.FC<NavigationRendererProps> = ({
                             </div>
                             <Icon className="w-5 h-5 flex-shrink-0" />
                             <span className="text-sm font-medium text-left flex-1">
-                              {item.label}
+                              {getNavItemLabel(item, intl)}
                             </span>
                             <div className="flex-shrink-0">
                               {isChatExpanded ? (
@@ -215,7 +216,7 @@ export const CondensedRenderer: React.FC<NavigationRendererProps> = ({
                           <Icon className="w-5 h-5 flex-shrink-0" />
                           {!isCondensedIconOnly && (
                             <span className="text-sm font-medium text-left flex-1">
-                              {item.label}
+                              {getNavItemLabel(item, intl)}
                             </span>
                           )}
                           {!isCondensedIconOnly && item.getTag && (
@@ -305,7 +306,7 @@ export const CondensedRenderer: React.FC<NavigationRendererProps> = ({
                       >
                         <Icon className="w-5 h-5 flex-shrink-0" />
                         <span className="text-sm font-medium text-left hidden min-[1200px]:block">
-                          {item.label}
+                          {getNavItemLabel(item, intl)}
                         </span>
                       </motion.button>
                     </DropdownMenuTrigger>
@@ -335,7 +336,7 @@ export const CondensedRenderer: React.FC<NavigationRendererProps> = ({
                   >
                     <Icon className="w-5 h-5 flex-shrink-0" />
                     <span className="text-sm font-medium text-left hidden min-[1200px]:block">
-                      {item.label}
+                      {getNavItemLabel(item, intl)}
                     </span>
                   </motion.button>
                 )}
